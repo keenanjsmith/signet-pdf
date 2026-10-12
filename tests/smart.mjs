@@ -25,6 +25,17 @@ page.on('pageerror', (e) => fail('page error: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error') fail('console: ' + m.text()); });
 page.on('dialog', (d) => d.accept());
 
+
+/** Is this element really visible on top (not hidden behind a window)? */
+const onTop = (sel) => page.evaluate((sel) => {
+  const el = document.querySelector(sel); if (!el) return false;
+  const r = el.getBoundingClientRect(); if (!r.width || !r.height) return false;
+  const pe = el.style.pointerEvents; el.style.pointerEvents = 'auto'; // messages let taps through; check what's drawn on top
+  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  el.style.pointerEvents = pe;
+  return !!hit && (el === hit || el.contains(hit)) && getComputedStyle(el).opacity !== '0';
+}, sel);
+
 async function home() { await page.goto(BASE + '?test'); await page.waitForSelector('.drop'); }
 async function open(file) {
   await page.setInputFiles('#open-file', file);
@@ -49,13 +60,32 @@ check(await page.isVisible('text=Add your name, address'), 'home explains My inf
 await page.click('.home-sec:has(h2:text("My info")) button:has-text("Edit")');
 for (const k of ['firstName', 'middleName', 'lastName', 'email', 'phone', 'street', 'unit', 'city', 'state', 'zip']) await page.fill(`#pf-${k}`, ME[k]);
 await page.click('dialog button:has-text("Add private details")');
+check(!/\bnull\b|undefined/.test(await page.textContent('dialog')), 'no stray "null" or "undefined" text in My info');
 await page.fill('#pf-dob', ME.dob);
 await page.fill('#pf-ssn', ME.ssn);
 await page.fill('#pf-vaFile', ME.vaFile);
+// Forgetting the passcode: the reason must be visible, next to Save, and point at the box.
+await page.click('dialog button:has-text("Save")');
+await page.waitForSelector('.form-error:has-text("need a passcode")');
+check(await onTop('.form-error'), 'missing passcode: message shown where you can see it');
+check(await page.evaluate(() => document.activeElement?.id) === 'pf-pass1', 'missing passcode: takes you to the passcode box');
 await page.fill('#pf-pass1', 'short');
 await page.fill('#pf-pass2', 'short');
 await page.click('dialog button:has-text("Save")');
-check(await page.isVisible('#toast:has-text("at least 8")'), 'short passcode refused');
+await page.waitForSelector('.form-error:has-text("at least 8")');
+check(await onTop('.form-error'), 'short passcode refused, visibly');
+await page.fill('#pf-pass1', 'long enough 1');
+await page.fill('#pf-pass2', 'long enough 2');
+await page.click('dialog button:has-text("Save")');
+await page.waitForSelector('.form-error:has-text("match")');
+check(await onTop('.form-error'), 'mismatched passcodes refused, visibly');
+await page.fill('#pf-ssn', '12345');
+await page.fill('#pf-pass2', 'long enough 1');
+await page.click('dialog button:has-text("Save")');
+await page.waitForSelector('.form-error:has-text("9 digits")');
+check(await page.evaluate(() => document.activeElement?.id) === 'pf-ssn', 'short SSN: takes you to the SSN box');
+await page.fill('#pf-ssn', ME.ssn);
+
 await page.fill('#pf-pass1', PASS);
 await page.fill('#pf-pass2', PASS);
 await page.click('dialog button:has-text("Save")');
@@ -100,6 +130,14 @@ check(await val('Applicant.DOB') === '07/04/1990', 'birth date filled after unlo
 // Sign here: create a typed signature, fitted into the signature box; date filled.
 check(await page.locator('.tgt-sign').count() === 1, 'one sign-here box shown');
 await page.click('.tgt-sign .sign-tag');
+// A message shown while a window is open must appear on top of it.
+await page.click('dialog button:has-text("Use this signature")');
+await page.waitForSelector('#toast.show:has-text("first")');
+await page.waitForTimeout(300);
+// Behind an open window the browser ignores taps, so check the message is in the
+// top layer (where windows live too) and was put there after the window opened.
+check(await page.evaluate(() => { const t = document.getElementById('toast'); const r = t.getBoundingClientRect();
+  return t.matches(':popover-open') && getComputedStyle(t).opacity === '1' && r.top >= 0 && r.bottom <= innerHeight; }), 'messages appear on top of open windows');
 await page.click('dialog button:has-text("Type")');
 await page.fill('dialog input[aria-label="Name to type"]', 'Alex Rivera');
 await page.click('dialog button:has-text("Use this signature")');

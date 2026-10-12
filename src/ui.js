@@ -122,20 +122,43 @@ export function passwordDialog(title, message, label = 'Password') {
 
 /* ---------- toast + busy ---------- */
 let toastTimer;
+const canPopover = typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
+
+/**
+ * Put an element in the browser's "top layer" so it shows above any open
+ * window (dialogs live in the top layer too, and would otherwise cover it).
+ * Showing it again moves it above windows opened since.
+ */
+function raise(el) {
+  if (canPopover) {
+    if (!el.popover) el.popover = 'manual';
+    if (el.parentNode !== document.body) document.body.append(el);
+    try { if (el.matches(':popover-open')) el.hidePopover(); el.showPopover(); return; } catch {}
+  }
+  // Older browsers: place it inside the topmost open window instead.
+  const dialogs = [...document.querySelectorAll('dialog[open]')];
+  (dialogs[dialogs.length - 1] || document.body).append(el);
+}
+function lower(el) {
+  if (canPopover && el.popover) { try { el.hidePopover(); } catch {} }
+}
+
 export function toast(message, kind = '') {
-  let t = $('#toast');
-  if (!t) { t = h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' }); document.body.append(t); }
+  let t = document.getElementById('toast');
+  if (!t) t = h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' });
   t.textContent = message;
-  t.className = 'show ' + kind;
+  t.className = kind;
+  raise(t);
+  requestAnimationFrame(() => { t.className = 'show ' + kind; });
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = ''; }, kind === 'error' ? 6000 : 3200);
+  toastTimer = setTimeout(() => { t.className = kind; setTimeout(() => { if (!t.classList.contains('show')) lower(t); }, 250); }, kind === 'error' ? 6000 : 3200);
 }
 
 export async function busy(message, fn) {
   const b = h('div', { class: 'busy', role: 'alert', 'aria-busy': 'true' }, h('div', { class: 'busy-card' }, h('div', { class: 'spinner' }), h('p', {}, message)));
-  document.body.append(b);
+  raise(b);
   // Let the overlay paint before heavy work starts.
   await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
   try { return await fn((m) => { b.querySelector('p').textContent = m; }); }
-  finally { b.remove(); }
+  finally { lower(b); b.remove(); }
 }

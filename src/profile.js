@@ -111,22 +111,22 @@ export async function editProfile() {
 
       const renderPrivate = () => {
         if (rec.vault && !vaultOpen) {
-          privBox.replaceChildren(
+          privBox.replaceChildren(...[
             h('div', { class: 'locked-row' }, icon('lock'),
               h('div', { class: 'grow' }, h('strong', {}, 'Locked'), h('br'), h('span', { class: 'small muted' }, `${(rec.privateKeys || []).length} private detail${(rec.privateKeys || []).length === 1 ? '' : 's'} saved`)),
-              h('button', { class: 'btn', type: 'button', onclick: async () => { if (await unlock('Enter your passcode to view or change your private details.')) { vaultOpen = { ...unlocked }; renderPrivate(); } } }, 'Unlock')));
+              h('button', { class: 'btn', type: 'button', onclick: async () => { if (await unlock('Enter your passcode to view or change your private details.')) { vaultOpen = { ...unlocked }; renderPrivate(); } } }, 'Unlock'))]);
           return;
         }
         if (!rec.vault && !vaultOpen) {
-          privBox.replaceChildren(
+          privBox.replaceChildren(...[
             h('p', { class: 'small muted' }, 'Social Security number, date of birth, VA file number and service number. These are encrypted with a passcode only you know, and Signet asks for it before using them.'),
-            h('button', { class: 'btn', type: 'button', onclick: () => { vaultOpen = {}; renderPrivate(); } }, icon('plus'), 'Add private details'));
+            h('button', { class: 'btn', type: 'button', onclick: () => { vaultOpen = {}; renderPrivate(); } }, icon('plus'), 'Add private details')]);
           return;
         }
         const pf = PROFILE_FIELDS.filter((f) => f.private);
         const pass1 = h('input', { class: 'input', type: 'password', autocomplete: 'new-password', id: 'pf-pass1' });
         const pass2 = h('input', { class: 'input', type: 'password', autocomplete: 'new-password', id: 'pf-pass2' });
-        privBox.replaceChildren(
+        privBox.replaceChildren(...[
           h('div', { class: 'grid2' }, ...pf.map((f) => field(f, vaultOpen[f.key]))),
           rec.vault
             ? h('p', { class: 'small muted' }, 'Leave the passcode boxes empty to keep your current passcode.')
@@ -134,15 +134,28 @@ export async function editProfile() {
           h('div', { class: 'grid2' },
             h('label', { class: 'field' }, h('span', {}, rec.vault ? 'New passcode (optional)' : 'Passcode'), pass1),
             h('label', { class: 'field' }, h('span', {}, 'Same passcode again'), pass2)),
+          !rec.vault ? h('button', { class: 'link small left', type: 'button', onclick: () => { vaultOpen = null; renderPrivate(); } }, 'Don\u2019t add private details') : null,
           rec.vault ? h('button', { class: 'link small left', type: 'button', onclick: async () => {
             if (!(await confirmDialog('Remove private details?', 'Your saved SSN, date of birth and ID numbers will be deleted from this device.', 'Remove', true))) return;
             rec.vault = null; rec.privateKeys = []; vaultOpen = null; unlocked = null; session = null;
             await store.set('profile', rec); changed(); renderPrivate(); toast('Private details removed');
-          } }, 'Remove private details') : null);
+          } }, 'Remove private details') : null].filter(Boolean));
       };
       renderPrivate();
 
+      const errorBox = h('p', { class: 'form-error', role: 'alert', hidden: true });
+      const saveBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Save');
+      // Say what's wrong right above the Save button and take you to the box.
+      const problem = (msg, el) => {
+        errorBox.textContent = msg;
+        errorBox.hidden = false;
+        dlgRoot.querySelectorAll('[aria-invalid]').forEach((x) => x.removeAttribute('aria-invalid'));
+        if (el) { el.setAttribute('aria-invalid', 'true'); el.focus(); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+        else errorBox.scrollIntoView({ block: 'center' });
+      };
+
       const save = async () => {
+        errorBox.hidden = true;
         const basic = {};
         for (const f of PROFILE_FIELDS) if (!f.private) basic[f.key] = (inputs[f.key]?.value || '').trim();
         if (basic.state) basic.state = basic.state.length === 2 ? basic.state.toUpperCase() : basic.state;
@@ -150,12 +163,14 @@ export async function editProfile() {
         if (vaultOpen) {
           const priv = {};
           for (const f of PROFILE_FIELDS) if (f.private) { const v = (inputs[f.key]?.value || '').trim(); if (v) priv[f.key] = v; }
-          if (priv.ssn && priv.ssn.replace(/\D/g, '').length !== 9) return toast('A Social Security number has 9 digits.', 'error');
-          const p1 = document.getElementById('pf-pass1')?.value || '', p2 = document.getElementById('pf-pass2')?.value || '';
+          if (priv.ssn && priv.ssn.replace(/\D/g, '').length !== 9) return problem('A Social Security number has 9 digits. Check the number, or clear the box to leave it out.', inputs.ssn);
+          const pass1 = document.getElementById('pf-pass1'), pass2 = document.getElementById('pf-pass2');
+          const p1 = pass1?.value || '', p2 = pass2?.value || '';
           let passcode = null;
           if (p1 || p2 || !rec.vault) {
-            if (Object.keys(priv).length && p1.length < 8) return toast('Use a passcode of at least 8 characters.', 'error');
-            if (p1 !== p2) return toast('The passcodes do not match.', 'error');
+            if (Object.keys(priv).length && !p1) return problem('Private details need a passcode to lock them. Type one (at least 8 characters) in both passcode boxes, or clear the private boxes to save without them.', pass1);
+            if (Object.keys(priv).length && p1.length < 8) return problem('Use a passcode of at least 8 characters, like a short phrase.', pass1);
+            if (p1 !== p2) return problem('The two passcodes don\u2019t match. Type the same passcode in both boxes.', pass2);
             passcode = p1;
           }
           if (Object.keys(priv).length) {
@@ -165,11 +180,11 @@ export async function editProfile() {
               if (!keep) {
                 const again = await passwordDialog('Confirm passcode', 'Enter your current passcode to save the changes.', 'Passcode');
                 if (again == null) return;
-                if (!(await open(rec.vault, again))) return toast('That passcode is not right.', 'error');
+                if (!(await open(rec.vault, again))) return problem('That passcode isn\u2019t right, so nothing was saved. Try Save again.');
                 keep = session;
               }
             }
-            next.vault = await busy('Encrypting', () => seal(priv, passcode, keep));
+            next.vault = await busy('Locking your private details', () => seal(priv, passcode, keep));
             next.privateKeys = Object.keys(priv);
             unlocked = priv; touch();
           } else { next.vault = null; next.privateKeys = []; unlocked = null; session = null; }
@@ -179,8 +194,16 @@ export async function editProfile() {
         toast('My info saved');
         close(true);
       };
+      saveBtn.addEventListener('click', async () => {
+        if (saveBtn.disabled) return;
+        saveBtn.disabled = true; saveBtn.textContent = 'Saving\u2026';
+        try { await save(); }
+        catch (e) { console.error(e); problem('Something went wrong saving My info (' + (e?.message || e) + '). Nothing was changed. Try again, and if it keeps happening, let us know.'); }
+        finally { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+      });
+      const dlgRoot = h('div', { class: 'stack profile' });
 
-      return h('div', { class: 'stack profile' },
+      dlgRoot.append(
         h('p', { class: 'muted' }, 'Signet uses this to fill in forms for you. It stays on this device and is never uploaded.'),
         h('h3', {}, 'Name'), h('div', { class: 'grid2' }, ...group('name')),
         h('h3', {}, 'Contact'), h('div', { class: 'grid2' }, ...group('contact')),
@@ -188,9 +211,11 @@ export async function editProfile() {
         h('datalist', { id: 'pf-states' }, ...US_STATES.map((s) => h('option', { value: s }))),
         h('h3', {}, 'Private details'), privBox,
         h('label', { class: 'check' }, auto, h('span', {}, h('strong', {}, 'Fill in forms automatically'), h('br'), h('span', { class: 'small muted' }, 'When you open a form, matching boxes are filled and highlighted for you to check.'))),
+        errorBox,
         h('div', { class: 'row-end' },
           h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Cancel'),
-          h('button', { class: 'btn btn-primary', type: 'button', onclick: save }, 'Save')));
+          saveBtn));
+      return dlgRoot;
     },
   });
 }
