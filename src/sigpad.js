@@ -139,7 +139,7 @@ async function renderTyped(text, font, color) {
   const ctx = c.getContext('2d');
   // Some handwriting fonts have a hair-thin space, so lay words out with a real gap.
   const words = text.split(/\s+/).filter(Boolean);
-  const gap = size * 0.3;
+  const gap = size * 0.45;
   ctx.font = `${size}px "${font.family}"`;
   const widths = words.map((wd) => ctx.measureText(wd).width);
   const w = Math.ceil(widths.reduce((a, b) => a + b, 0) + gap * (words.length - 1) + size);

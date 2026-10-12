@@ -99,10 +99,18 @@ Once installed it works offline. When you publish a new version, it updates itse
 
 ## Using it
 
-1. Open a PDF.
-2. Tap a fill-in box to type in it (if the PDF has them).
-3. Tap **Signature**, **Initials**, **Text**, **Date**, **Check** or **X**. It appears in the middle of the screen. Drag it into place; drag the blue corner dot to resize; tap the red ✕ to remove it. **Undo** is at the top.
-4. Tap **Finish** → **Create signed PDF** → **Save to Google Drive**, **Share or send**, or **Download**.
+**First, once:** on the home screen, tap **My info → Edit** and add your name, phone, email and address. To have Signet fill your Social Security number, date of birth, VA file number or service number too, tap **Add private details** and pick a passcode (8+ characters; write it down, nobody can recover it).
+
+Then for each PDF:
+
+1. Open it. Signet looks for boxes to fill. If you've set up My info, matching boxes fill in by themselves and turn **green**. Check them; **Undo fill** takes them all back out.
+2. To fill private details, tap **Fill private** and enter your passcode.
+3. Tap the yellow **Sign here** tag. Your signature fits itself into the box, and the "date signed" boxes beside it get today's date.
+4. **Next box** jumps to the next empty box. Tap a box to type in it. On flat PDFs, the blanks Signet found have a dashed outline; tap one to write on it.
+5. For anything else, use **Signature**, **Initials**, **Text**, **Date**, **Check** or **X**. It appears in the middle of the screen. Drag it into place; drag the blue corner dot to resize; tap the red ✕ to remove it. **Undo** is at the top.
+6. Tap **Finish** → **Create signed PDF** → **Save to Google Drive**, **Share or send**, or **Download**.
+
+Signet fills only boxes it's sure about, and skips boxes about other people (spouse, emergency contact, point of contact, witness, landlord, representative, a new address). Scanned paper forms are pictures of pages, so on those you place things yourself.
 
 ### Digital IDs (optional)
 

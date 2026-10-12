@@ -10,6 +10,7 @@ import { h, $, icon, openDialog, confirmDialog, passwordDialog, toast, busy } fr
 import { store, uid } from './store.js';
 import { createSignature, markImage } from './sigpad.js';
 import * as drive from './drive.js';
+import { editProfile, hasProfile, getRecord, lock as lockProfile } from './profile.js';
 
 const app = $('#app');
 const state = {
@@ -47,12 +48,17 @@ async function renderHome() {
 
   const sigRow = h('div', { class: 'sig-shelf' });
   const idRow = h('div', { class: 'id-list' });
+  const meRow = h('div', { class: 'me-row' });
 
   const page = h('main', { class: 'home' },
     h('header', { class: 'home-head' },
       h('div', { class: 'brand' }, logo(), h('span', {}, 'Signet')),
       h('button', { class: 'icon-btn', 'aria-label': 'Settings', onclick: openSettings }, icon('settings'))),
     h('section', { class: 'home-open' }, drop, driveBtn),
+    h('section', { class: 'home-sec' },
+      h('div', { class: 'sec-head' }, h('h2', {}, 'My info'),
+        h('button', { class: 'btn btn-quiet', onclick: async () => { await editProfile(); renderMe(); } }, icon('fields'), 'Edit')),
+      meRow),
     h('section', { class: 'home-sec' },
       h('div', { class: 'sec-head' }, h('h2', {}, 'Your signatures'),
         h('button', { class: 'btn btn-quiet', onclick: async () => { await newSignature('signature'); renderShelf(); } }, icon('plus'), 'Add')),
@@ -85,7 +91,16 @@ async function renderHome() {
       ? h('ul', { class: 'plain' }, ...ids.map((i) => h('li', { class: 'id-chip' }, icon('seal'), h('span', {}, i.name), h('span', { class: 'small muted' }, i.selfSigned ? 'Personal' : i.issuer))))
       : h('p', { class: 'muted small' }, 'Optional. A digital ID adds a tamper-proof certificate signature, for places that ask for one.'));
   }
-  renderShelf(); renderIds();
+  async function renderMe() {
+    const rec = await getRecord();
+    const b = rec?.basic || {};
+    const name = [b.firstName, b.lastName].filter(Boolean).join(' ');
+    meRow.replaceChildren(await hasProfile()
+      ? h('div', { class: 'id-chip' }, icon('fields'), h('div', { class: 'grow' }, h('strong', {}, name || 'Saved'), h('br'),
+          h('span', { class: 'small muted' }, (rec.autoFill !== false ? 'Fills forms for you' : 'Fills forms when you ask') + ((rec.privateKeys || []).length ? ` \u2022 ${rec.privateKeys.length} private detail${rec.privateKeys.length === 1 ? '' : 's'} locked` : ''))))
+      : h('p', { class: 'muted small' }, 'Add your name, address and other details once, and Signet fills them into forms for you. They stay on this device.'));
+  }
+  renderShelf(); renderIds(); renderMe();
   app.replaceChildren(page);
 }
 
@@ -102,6 +117,7 @@ function showPrivacy() {
     build: () => h('div', { class: 'prose' },
       h('p', {}, 'Signet runs entirely in your browser. Opening, signing and saving PDFs all happen on this device. There is no Signet server, no account, no tracking and no analytics.'),
       h('p', {}, 'Saved signatures and digital IDs are kept in this browser’s storage on this device only. Digital IDs stay locked with your password, and the password is never stored.'),
+      h('p', {}, 'My info works like your browser’s autofill: your name, contact details and address are saved on this device. Private details (Social Security number, date of birth, VA file and service numbers) are encrypted with a passcode only you know, using AES-256. Signet asks for that passcode before using them, keeps them unlocked only in memory, and locks them again after 15 minutes or when the app closes. Finding and filling boxes happens entirely on this device; nothing about your documents or details is sent anywhere.'),
       h('p', {}, 'Google is only contacted if you set up Google Drive, and then only when you save to or open from Drive (the Finish screen gets Google’s sign-in ready in advance). The app asks for the narrowest Drive permission, which lets it see only the files it saves for you or that you pick yourself. Your Google sign-in is kept in memory and forgotten when the app closes.'),
       h('p', {}, 'The code is open source, so anyone can check these promises.')),
   });
@@ -145,7 +161,7 @@ async function openBytes(bytes, name) {
     document.title = name + ' – Signet';
     $('#doc-name').textContent = name;
     updatePageLabel();
-    if (await state.viewer.hasFormFields()) $('#form-hint').hidden = false;
+    state.smart?.analyze().catch((e) => { console.warn('Box scan failed', e); $('#smart-bar').hidden = true; });
   } catch (e) {
     console.error(e);
     state.doc = null;
@@ -168,6 +184,7 @@ function friendlyOpenError(e) {
 async function renderEditor() {
   const { Viewer } = await import('./viewer.js');
   const { Items } = await import('./items.js');
+  const { Smart } = await import('./smart.js');
 
   const container = h('div', { class: 'stage', id: 'stage' }, h('div', { class: 'pdfViewer' }));
   const undoBtn = h('button', { class: 'icon-btn', 'aria-label': 'Undo', title: 'Undo', disabled: true, onclick: () => state.items.undo() }, icon('undo'));
@@ -190,24 +207,25 @@ async function renderEditor() {
     tool('check', 'Check', () => placeMark('check')),
     tool('cross', 'X', () => placeMark('cross')));
 
-  const hint = h('div', { class: 'form-hint', id: 'form-hint', hidden: true }, icon('fields'),
-    h('span', {}, 'This PDF has fill-in boxes. Tap one to type in it.'),
-    h('button', { class: 'icon-btn sm', 'aria-label': 'Dismiss', onclick: () => { hint.hidden = true; } }, icon('close')));
+  const bar = h('div', { class: 'smart-bar', id: 'smart-bar', hidden: true, role: 'region', 'aria-label': 'Boxes to fill' });
 
-  const editor = h('div', { class: 'editor' }, top, hint, h('div', { class: 'stage-wrap' }, container), dock);
+  const editor = h('div', { class: 'editor' }, top, bar, h('div', { class: 'stage-wrap' }, container), dock);
   app.replaceChildren(editor);
 
   state.items = null;
   state.viewer = new Viewer(container, {
     onPassword: (wrong) => passwordDialog(wrong ? 'Wrong password' : 'Password needed', wrong ? 'That password is not right. Try again.' : 'This PDF is protected. Enter its password to open it.'),
-    onOverlay: (n, ov) => state.items?.mount(n, ov),
+    onOverlay: (n, ov) => { state.smart?.mount(n, ov); state.items?.mount(n, ov); },
   });
   state.items = new Items(state.viewer, {
     onChange: (items) => {
       undoBtn.disabled = !items.canUndo;
       state.dirty = true; state.result = null;
+      state.smart?.refresh();
     },
   });
+  state.smart?.destroy();
+  state.smart = new Smart({ viewer: state.viewer, items: state.items, chooseSignature, bar });
   state.viewer.eventBus.on('pagechanging', updatePageLabel);
 }
 
@@ -220,6 +238,7 @@ async function leaveEditor() {
   const unsaved = state.items?.count > 0 && !state.result;
   if (unsaved && !(await confirmDialog('Leave without finishing?', 'What you added to this PDF will be lost.', 'Leave', true))) return false;
   await state.viewer?.close();
+  state.smart?.destroy(); state.smart = null;
   state.doc = null; state.result = null; state.dirty = false;
   return true;
 }
@@ -255,6 +274,13 @@ async function chooseSignature(kind) {
 }
 
 async function placeSignature(kind) {
+  // A "Sign here" box on the page you're looking at? Sign there, fitted to the box.
+  const smart = state.smart;
+  if (smart?.ready) {
+    const page = state.viewer.pageNearestCenter();
+    const t = smart.signTargets(kind).find((x) => x.page === page && !smart.isFilled(x));
+    if (t) return smart.sign(t);
+  }
   const sig = await chooseSignature(kind);
   if (!sig) return;
   const { page, x, y } = placement();
@@ -535,10 +561,10 @@ async function openSettings(fromSave = false) {
           drive.connected() ? h('button', { class: 'btn', onclick: () => { drive.signOut(); toast('Signed out of Google'); close(); } }, 'Sign out of Google') : null),
         fromSave === true ? null : h('hr'),
         fromSave === true ? null : h('h3', {}, 'This device'),
-        fromSave === true ? null : h('p', { class: 'small muted' }, 'Remove saved signatures, digital IDs and settings from this browser.'),
+        fromSave === true ? null : h('p', { class: 'small muted' }, 'Remove saved signatures, My info, digital IDs and settings from this browser.'),
         fromSave === true ? null : h('button', { class: 'btn btn-danger', onclick: async () => {
-          if (!(await confirmDialog('Erase everything?', 'Saved signatures, digital IDs and settings will be deleted from this device. This cannot be undone.', 'Erase', true))) return;
-          drive.signOut(); state.unlockedIds.clear();
+          if (!(await confirmDialog('Erase everything?', 'Saved signatures, My info, digital IDs and settings will be deleted from this device. This cannot be undone.', 'Erase', true))) return;
+          drive.signOut(); state.unlockedIds.clear(); lockProfile();
           await store.wipe();
           toast('Everything was erased from this device');
           close(); renderHome();

@@ -179,6 +179,7 @@ details p + p { margin-top: 8px; }
   height: 100dvh; display: grid;
   grid-template-rows: auto auto 1fr auto;
   grid-template-areas: 'top' 'hint' 'stage' 'dock';
+  grid-template-columns: minmax(0, 1fr);
 }
 .topbar {
   grid-area: top; display: flex; align-items: center; gap: 4px;
@@ -190,12 +191,52 @@ details p + p { margin-top: 8px; }
 .page-label { font-size: 0.8125rem; color: var(--muted); }
 .top-actions { display: flex; align-items: center; gap: 2px; }
 .top-actions .btn { margin-left: 6px; }
-.form-hint {
-  grid-area: hint; display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px;
+/* The smart bar: box count, My info, next box */
+.smart-bar {
+  grid-area: hint; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 6px 10px 6px 14px;
   background: color-mix(in srgb, var(--pen-soft) 100%, var(--surface)); font-size: 0.875rem; border-bottom: 1px solid var(--line);
 }
-.form-hint > .icon { color: var(--pen); width: 18px; height: 18px; }
-.form-hint span { flex: 1; }
+.sbar-main { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; flex: 1 1 260px; min-width: 0; }
+.sbar-count { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.sbar-count .icon { color: var(--pen); width: 18px; height: 18px; }
+.sbar-note { color: var(--ok); font-weight: 700; }
+.sbar-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.sbar-msg { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.btn.sm { min-height: 36px; padding: 0 12px; font-size: 0.875rem; }
+.btn.sm .icon { width: 17px; height: 17px; }
+.icon.flip { transform: scaleX(-1); }
+.spinner.sm { width: 16px; height: 16px; border-width: 2px; }
+
+/* Sign-here boxes and blanks found on the page */
+.tgt-layer { position: absolute; inset: 0; pointer-events: none; }
+.tgt { position: absolute; pointer-events: auto; padding: 0; margin: 0; border-radius: 3px; }
+.tgt-spot { border: 1.5px dashed rgba(27, 58, 158, 0.55); background: rgba(27, 58, 158, 0.06); cursor: text; }
+.tgt-spot:hover, .tgt-spot:focus-visible { background: rgba(27, 58, 158, 0.14); border-style: solid; }
+.tgt-sign { background: rgba(255, 196, 0, 0.18); border: 1.5px solid rgba(214, 150, 0, 0.9); cursor: pointer; }
+.sign-tag {
+  position: absolute; left: -2px; top: 50%; transform: translate(-100%, -50%);
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer;
+  min-height: 30px; padding: 0 10px 0 8px; border: 0; border-radius: 6px 0 0 6px;
+  background: #f5b700; color: #1d1600; font: 700 13px/1 var(--font); box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.sign-tag .icon { width: 16px; height: 16px; color: #1d1600; }
+/* Not enough room on the left edge of the page: put the tag inside the box. */
+.tgt-sign.tag-in .sign-tag { transform: translate(0, -50%); left: 2px; border-radius: 6px; }
+.tgt.pulse { animation: pulse 0.9s ease-out 2; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(47, 107, 255, 0.7); } 100% { box-shadow: 0 0 0 12px rgba(47, 107, 255, 0); } }
+@media (prefers-reduced-motion: reduce) { .tgt.pulse { animation: none; outline: 3px solid var(--focus); } }
+
+/* Filled by My info: green, so you know to check it */
+.annotationLayer section.sf-auto :is(input, textarea, select) { background-image: none !important; background-color: rgba(43, 160, 85, 0.22) !important; outline: 1.5px solid rgba(43, 122, 75, 0.85); }
+.item.item-auto:not(.sel) { background: rgba(43, 122, 75, 0.14); outline: 1px solid rgba(43, 122, 75, 0.6); }
+
+/* My info editor */
+.profile h3 { margin-top: 6px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid2 .span2 { grid-column: 1 / -1; }
+@media (max-width: 480px) { .grid2 { grid-template-columns: 1fr; } }
+.locked-row { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); }
+.locked-row > .icon { color: var(--seal); }
 .stage-wrap { grid-area: stage; position: relative; min-height: 0; }
 .stage { position: absolute; inset: 0; overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
 
@@ -231,7 +272,10 @@ details p + p { margin-top: 8px; }
 .annotationLayer .textWidgetAnnotation :is(input, textarea),
 .annotationLayer .choiceWidgetAnnotation select,
 .annotationLayer .buttonWidgetAnnotation:is(.checkBox, .radioButton) input {
-  background-color: rgba(27, 58, 158, 0.07);
+  background-image: none;
+  background-color: rgba(27, 58, 158, 0.12);
+  outline: 1px solid rgba(27, 58, 158, 0.35);
+  outline-offset: -1px;
 }
 .annotationLayer .textWidgetAnnotation :is(input, textarea):focus { background-color: rgba(27, 58, 158, 0.13); outline: 1.5px solid #1b3a9e; }
 

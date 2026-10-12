@@ -122,7 +122,7 @@ export class Items {
   element(it) {
     let el = this.els.get(it.id);
     if (el) return el;
-    el = h('div', { class: 'item item-' + it.kind, 'data-id': it.id, tabindex: '0', role: 'group',
+    el = h('div', { class: 'item item-' + it.kind + (it.auto ? ' item-auto' : ''), 'data-id': it.id, tabindex: '0', role: 'group',
       'aria-label': { signature: 'Signature', initials: 'Initials', text: 'Text', date: 'Date', check: 'Check mark', cross: 'X mark', dot: 'Dot' }[it.kind] });
     if (it.src) el.append(h('img', { src: it.src, alt: '', draggable: 'false' }));
     if (it.kind === 'text' || it.kind === 'date') {

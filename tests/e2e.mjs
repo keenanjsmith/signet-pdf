@@ -114,7 +114,7 @@ for (const mobile of [false, true]) {
   console.log(`1. Fill and sign a form (${label})`);
   const { ctx, page } = await session(label, { mobile });
   await open(page, 'tests/fixtures-out/form.pdf');
-  if (await page.locator('#form-hint').isHidden()) problems.push(`[${label}] form hint not shown`);
+  await page.waitForSelector('.smart-bar:has-text("fill-in box")', { timeout: 10000 }).catch(() => problems.push(`[${label}] fill-in box bar not shown`));
 
   await page.fill('.annotationLayer input[type="text"]', 'Keenan Q. Tester');
   await page.locator('.annotationLayer input[type="checkbox"]').check();
