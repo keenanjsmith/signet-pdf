@@ -110,6 +110,12 @@ Then for each PDF:
 5. For anything else, use **Signature**, **Initials**, **Text**, **Date**, **Check** or **X**. It appears in the middle of the screen. Drag it into place; drag the blue corner dot to resize; tap the red ✕ to remove it. **Undo** is at the top.
 6. Tap **Finish** → **Create signed PDF** → **Save to Google Drive**, **Share or send**, or **Download**.
 
+**Listening and talking**
+
+- **Read aloud:** tap the speaker button at the top. Use pause, back and forward, and the speed menu. If Signet says your device has no built-in voice, add one: Windows Settings → Time & language → Speech → Add voices; Mac System Settings → Accessibility → Spoken Content. Phones already have one.
+- **Voice note:** tap **Voice** in the toolbar, tap the microphone, speak, tap again to stop, listen back, then **Add to page** and drag the speaker icon next to what it's about. Tap it to play. When you finish, voice notes are inside the PDF and you can also download or share them as audio files, because only Adobe's apps play audio inside a PDF. **Save to Google Drive** saves them alongside the PDF.
+- **Fill in a box by talking:** tap the box, then tap the microphone on your phone's keyboard. On Windows press Windows key + H; on a Mac press the Globe (fn) key twice.
+
 Signet fills only boxes it's sure about, and skips boxes about other people (spouse, emergency contact, point of contact, witness, landlord, representative, a new address). Scanned paper forms are pictures of pages, so on those you place things yourself.
 
 ### Digital IDs (optional)

@@ -120,12 +120,12 @@ async function folderId() {
 }
 
 /** Upload a PDF into the "Signet PDF" folder. Returns { id, name, webViewLink }. */
-export async function uploadPdf(bytes, name) {
+export async function uploadPdf(bytes, name, mimeType = 'application/pdf') {
   await signIn();
   const parent = await folderId();
-  const meta = { name, mimeType: 'application/pdf', parents: [parent] };
+  const meta = { name, mimeType, parents: [parent] };
   const boundary = 'signet' + Math.random().toString(16).slice(2);
-  const head = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`;
+  const head = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
   const tail = `\r\n--${boundary}--`;
   const body = new Blob([head, bytes, tail]);
   if (bytes.length < 4.5 * 1024 * 1024) {
@@ -137,12 +137,12 @@ export async function uploadPdf(bytes, name) {
   // Larger files: resumable upload.
   const init = await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,webViewLink', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': 'application/pdf', 'X-Upload-Content-Length': String(bytes.length) },
+    headers: { 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': mimeType, 'X-Upload-Content-Length': String(bytes.length) },
     body: JSON.stringify(meta),
   });
   const loc = init.headers.get('Location');
   if (!loc) throw new Error('Google Drive did not accept the upload. Try again.');
-  const put = await fetch(loc, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: bytes });
+  const put = await fetch(loc, { method: 'PUT', headers: { 'Content-Type': mimeType }, body: bytes });
   if (!put.ok) throw new Error('Upload to Google Drive failed (' + put.status + ').');
   return put.json();
 }

@@ -11,6 +11,8 @@ import { store, uid } from './store.js';
 import { createSignature, markImage } from './sigpad.js';
 import * as drive from './drive.js';
 import { editProfile, hasProfile, getRecord, lock as lockProfile } from './profile.js';
+import { recordVoiceNote, canRecord, noteBadge, togglePlay, stopPlayback } from './voice.js';
+import { voiceNoteName } from './pdf/names.js';
 
 const app = $('#app');
 const state = {
@@ -118,6 +120,7 @@ function showPrivacy() {
       h('p', {}, 'Signet runs entirely in your browser. Opening, signing and saving PDFs all happen on this device. There is no Signet server, no account, no tracking and no analytics.'),
       h('p', {}, 'Saved signatures and digital IDs are kept in this browser’s storage on this device only. Digital IDs stay locked with your password, and the password is never stored.'),
       h('p', {}, 'My info works like your browser’s autofill: your name, contact details and address are saved on this device. Private details (Social Security number, date of birth, VA file and service numbers) are encrypted with a passcode only you know, using AES-256. Signet asks for that passcode before using them, keeps them unlocked only in memory, and locks them again after 15 minutes or when the app closes. Finding and filling boxes happens entirely on this device; nothing about your documents or details is sent anywhere.'),
+      h('p', {}, 'Read aloud uses only the voices built into your device. Voices that would send your text to an online service are never used. Voice notes are recorded on this device and only leave it inside the PDF or audio files you choose to save, share or send.'),
       h('p', {}, 'Google is only contacted if you set up Google Drive, and then only when you save to or open from Drive (the Finish screen gets Google’s sign-in ready in advance). The app asks for the narrowest Drive permission, which lets it see only the files it saves for you or that you pick yourself. Your Google sign-in is kept in memory and forgotten when the app closes.'),
       h('p', {}, 'The code is open source, so anyone can check these promises.')),
   });
@@ -185,6 +188,8 @@ async function renderEditor() {
   const { Viewer } = await import('./viewer.js');
   const { Items } = await import('./items.js');
   const { Smart } = await import('./smart.js');
+  const { ReadAloud } = await import('./readaloud.js');
+  const { pdfjsLib } = await import('./viewer.js');
 
   const container = h('div', { class: 'stage', id: 'stage' }, h('div', { class: 'pdfViewer' }));
   const undoBtn = h('button', { class: 'icon-btn', 'aria-label': 'Undo', title: 'Undo', disabled: true, onclick: () => state.items.undo() }, icon('undo'));
@@ -193,6 +198,12 @@ async function renderEditor() {
     h('button', { class: 'icon-btn', 'aria-label': 'Close document', title: 'Close', onclick: async () => { if (await leaveEditor()) renderHome(); } }, icon('back')),
     h('div', { class: 'doc-title' }, h('span', { id: 'doc-name' }, ''), pageLabel),
     h('div', { class: 'top-actions' },
+      h('button', { class: 'icon-btn', id: 'read-btn', 'aria-label': 'Read aloud', title: 'Read aloud', onclick: () => {
+        if (!state.doc) return;
+        if (state.reader?.bar) { state.reader.close(); return; }
+        state.reader ||= new ReadAloud({ viewer: state.viewer, pdfjs: pdfjsLib, host: stageWrap });
+        state.reader.open();
+      } }, icon('speaker')),
       undoBtn,
       h('button', { class: 'icon-btn hide-sm', 'aria-label': 'Zoom out', title: 'Zoom out', onclick: () => state.viewer.zoom(1 / 1.2) }, icon('zoomOut')),
       h('button', { class: 'icon-btn hide-sm', 'aria-label': 'Zoom in', title: 'Zoom in', onclick: () => state.viewer.zoom(1.2) }, icon('zoomIn')),
@@ -205,11 +216,13 @@ async function renderEditor() {
     tool('text', 'Text', () => placeText('')),
     tool('date', 'Date', () => placeText(today(), 'date')),
     tool('check', 'Check', () => placeMark('check')),
-    tool('cross', 'X', () => placeMark('cross')));
+    tool('cross', 'X', () => placeMark('cross')),
+    canRecord() ? tool('mic', 'Voice', () => placeVoiceNote()) : null);
 
   const bar = h('div', { class: 'smart-bar', id: 'smart-bar', hidden: true, role: 'region', 'aria-label': 'Boxes to fill' });
 
-  const editor = h('div', { class: 'editor' }, top, bar, h('div', { class: 'stage-wrap' }, container), dock);
+  const stageWrap = h('div', { class: 'stage-wrap' }, container);
+  const editor = h('div', { class: 'editor' }, top, bar, stageWrap, dock);
   app.replaceChildren(editor);
 
   state.items = null;
@@ -223,7 +236,12 @@ async function renderEditor() {
       state.dirty = true; state.result = null;
       state.smart?.refresh();
     },
+    onActivate: (it) => {
+      if (it.kind !== 'audio') return;
+      togglePlay(it, (id) => document.querySelectorAll('.item-audio').forEach((el) => el.classList.toggle('playing', el.dataset.id === id)));
+    },
   });
+  state.reader?.close(); state.reader = null;
   state.smart?.destroy();
   state.smart = new Smart({ viewer: state.viewer, items: state.items, chooseSignature, bar });
   state.viewer.eventBus.on('pagechanging', updatePageLabel);
@@ -239,6 +257,7 @@ async function leaveEditor() {
   if (unsaved && !(await confirmDialog('Leave without finishing?', 'What you added to this PDF will be lost.', 'Leave', true))) return false;
   await state.viewer?.close();
   state.smart?.destroy(); state.smart = null;
+  state.reader?.close(); state.reader = null; stopPlayback();
   state.doc = null; state.result = null; state.dirty = false;
   return true;
 }
@@ -300,6 +319,15 @@ function placeText(text, kind = 'text') {
   // Focus right away, inside the same tap, so phones open the keyboard.
   if (!text) state.items.edit(it.id);
   coach();
+}
+
+async function placeVoiceNote() {
+  const note = await recordVoiceNote();
+  if (!note) return;
+  const { page, x, y } = placement();
+  const { url, ...audio } = note;
+  state.items.add({ kind: 'audio', src: noteBadge(), w: 20, h: 20, audio: { ...audio, url } }, page, x, y);
+  toast('Voice note added. Tap it to play; drag it next to what it\u2019s about.');
 }
 
 const markCache = {};
@@ -395,6 +423,10 @@ async function finish() {
         const r = state.result;
         const size = r.bytes.length > 1048576 ? (r.bytes.length / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(r.bytes.length / 1024)) + ' KB';
         const file = () => new File([r.bytes], r.name, { type: 'application/pdf' });
+        // Voice notes can also go out as their own audio files, for viewers that can't play them inside a PDF.
+        const notes = state.items.items.filter((i) => i.kind === 'audio' && i.audio?.bytes);
+        const noteFiles = () => notes.map((it, k) => new File([it.audio.bytes], voiceNoteName(it, k + 1), { type: it.audio.mime }));
+        const shareFiles = () => { const all = [file(), ...noteFiles()]; return navigator.canShare?.({ files: all }) ? all : [file()]; };
         const canShare = !!navigator.canShare && navigator.canShare({ files: [file()] });
         const status = h('p', { class: 'small muted', 'aria-live': 'polite' });
         actions.replaceChildren(...[
@@ -405,16 +437,21 @@ async function finish() {
             btn.disabled = true; status.textContent = 'Saving to Google Drive…';
             try {
               const f = await drive.uploadPdf(r.bytes, r.name);
-              status.replaceChildren('Saved to Google Drive in the "Signet PDF" folder. ', f.webViewLink ? h('a', { href: f.webViewLink, target: '_blank', rel: 'noopener noreferrer' }, 'Open in Drive') : '');
+              for (const nf of noteFiles()) await drive.uploadPdf(new Uint8Array(await nf.arrayBuffer()), nf.name, nf.type);
+              status.replaceChildren(notes.length ? `Saved to Google Drive in the "Signet PDF" folder, with ${notes.length} voice note${notes.length === 1 ? '' : 's'} as audio files. ` : 'Saved to Google Drive in the "Signet PDF" folder. ', f.webViewLink ? h('a', { href: f.webViewLink, target: '_blank', rel: 'noopener noreferrer' }, 'Open in Drive') : '');
               toast('Saved to Google Drive');
             } catch (err) { status.textContent = ''; toast(err.message, 'error'); }
             finally { btn.disabled = false; }
           } }, icon('drive'), 'Save to Google Drive'),
           canShare ? h('button', { class: 'btn btn-wide', onclick: async () => {
-            try { await navigator.share({ files: [file()], title: r.name }); }
+            try { await navigator.share({ files: shareFiles(), title: r.name }); }
             catch (err) { if (err?.name !== 'AbortError') toast('Sharing did not work here. Use Download instead.', 'error'); }
           } }, icon('share'), 'Share or send') : null,
           h('button', { class: 'btn btn-wide', onclick: () => download(r.bytes, r.name) }, icon('download'), 'Download'),
+          notes.length ? h('button', { class: 'btn btn-wide', onclick: async () => {
+            for (const nf of noteFiles()) { download(new Uint8Array(await nf.arrayBuffer()), nf.name, nf.type); await new Promise((res) => setTimeout(res, 400)); }
+          } }, icon('note'), notes.length === 1 ? 'Download voice note as audio' : `Download ${notes.length} voice notes as audio`) : null,
+          notes.length ? h('p', { class: 'small muted' }, 'Voice notes are inside the PDF too. Adobe Acrobat and Reader play them; most other viewers can\u2019t, so send the audio along if the reader may not use Adobe.') : null,
           status].filter(Boolean));
       }
       if (state.result) { options.hidden = true; createBtn.hidden = true; setTimeout(showActions); }
@@ -423,8 +460,8 @@ async function finish() {
   });
 }
 
-function download(bytes, name) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+function download(bytes, name, type = 'application/pdf') {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
   const a = h('a', { href: url, download: name });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -580,6 +617,28 @@ async function openSettings(fromSave = false) {
 
 window.addEventListener('beforeunload', (e) => {
   if (state.items?.count > 0 && !state.result) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* A one-time tip: you can fill boxes by speaking, using your device's own dictation. */
+function voiceTypingTip() {
+  const ua = navigator.userAgent;
+  const touch = matchMedia('(pointer: coarse)').matches;
+  if (touch) return 'Tip: tap the microphone on your keyboard to fill this in by speaking.';
+  if (/Windows/.test(ua)) return 'Tip: press the Windows key + H to fill this in by speaking.';
+  if (/Macintosh/.test(ua)) return 'Tip: press the Globe (fn) key twice to fill this in by speaking.';
+  return null;
+}
+document.addEventListener('focusin', (e) => {
+  const el = e.target;
+  const isBox = el.matches?.('.annotationLayer input[type="text"], .annotationLayer textarea, .item .txt');
+  if (!isBox) return;
+  let seen = false;
+  try { seen = localStorage.getItem('signet.tip.voiceTyping') === '1'; } catch {}
+  if (seen) return;
+  const tip = voiceTypingTip();
+  if (!tip) return;
+  try { localStorage.setItem('signet.tip.voiceTyping', '1'); } catch {}
+  setTimeout(() => toast(tip), 700); // after the keyboard opens
 });
 
 async function start() {

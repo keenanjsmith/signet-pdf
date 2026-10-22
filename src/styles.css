@@ -260,7 +260,7 @@ details p + p { margin-top: 8px; }
   .dock { flex-direction: column; justify-content: flex-start; gap: 6px; padding: 14px 8px; border-top: 0; border-right: 1px solid var(--line); }
   .tool { padding: 10px 4px 8px; font-size: 0.8125rem; }
 }
-@media (max-width: 520px) { .hide-sm { display: none; } }
+@media (max-width: 520px) { .hide-sm { display: none; } .tool { min-width: 48px; padding: 6px 2px 4px; } }
 
 /* pdf.js pages */
 .pdfViewer { padding: 8px 0 32px; }
@@ -301,11 +301,12 @@ details p + p { margin-top: 8px; }
 .item-del, .item-grip { display: none; }
 .item.sel .item-del, .item.sel .item-grip { display: grid; }
 .item-del {
-  position: absolute; top: -14px; right: -14px; width: 26px; height: 26px; place-items: center; padding: 0;
+  /* Fully outside the item's corner, so tapping a small item never hits it. */
+  position: absolute; top: -28px; right: -28px; width: 26px; height: 26px; place-items: center; padding: 0;
   border-radius: 50%; border: 0; background: #9b2335; color: #fff; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.25);
 }
 .item-del .icon { width: 14px; height: 14px; stroke-width: 2.6; }
-.item-del::after { content: ''; position: absolute; inset: -8px; }
+.item-del::after { content: ''; position: absolute; inset: -8px -8px 0 0; }
 .item-grip::after { content: ''; position: absolute; inset: -9px; }
 .item-grip {
   position: absolute; right: -22px; bottom: -22px; width: 18px; height: 18px; border-radius: 50%;
@@ -387,3 +388,42 @@ details p + p { margin-top: 8px; }
 .busy-card { background: var(--surface); padding: 22px 26px; border-radius: 14px; display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow); max-width: 86vw; }
 .spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--pen-soft); border-top-color: var(--pen); animation: spin 0.8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Read aloud */
+.ra-bar {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 40;
+  display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; justify-content: center;
+  width: min(560px, calc(100% - 24px)); padding: 8px 10px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow), 0 10px 30px rgba(0,0,0,.18);
+}
+.ra-controls { display: flex; align-items: center; gap: 2px; }
+.ra-btn .icon { width: 20px; height: 20px; }
+.ra-main { background: var(--pen); color: var(--pen-ink); border-radius: 50%; }
+.ra-main:hover:not(:disabled) { background: var(--pen); filter: brightness(1.1); }
+.ra-main .icon { fill: currentColor; }
+.ra-status { flex: 1 1 120px; font-size: 0.875rem; color: var(--muted); min-width: 0; }
+.ra-opts { display: flex; gap: 6px; }
+.ra-opts .input { min-height: 36px; padding: 4px 8px; width: auto; font-size: 0.875rem; }
+.ra-voice { max-width: 150px; }
+.ra-msg { display: flex; gap: 10px; align-items: flex-start; flex: 1; font-size: 0.875rem; }
+.ra-msg .icon { color: var(--pen); flex: none; }
+.ra-hl { position: absolute; pointer-events: none; background: rgba(255, 196, 0, 0.28); border-radius: 3px; box-shadow: 0 0 0 1px rgba(214, 150, 0, 0.6); }
+
+/* Voice notes */
+.vn-row { display: flex; align-items: center; gap: 16px; }
+.vn-mic {
+  width: 72px; height: 72px; border-radius: 50%; border: 0; cursor: pointer; flex: none;
+  display: grid; place-items: center; background: var(--pen); color: var(--pen-ink);
+  box-shadow: 0 2px 10px rgba(27, 58, 158, 0.35);
+}
+.vn-mic .icon { width: 32px; height: 32px; }
+.vn-mic.rec { background: var(--seal); animation: rec 1.4s ease-in-out infinite; }
+.vn-mic.rec .icon { fill: currentColor; }
+@keyframes rec { 50% { box-shadow: 0 0 0 10px rgba(155, 35, 53, 0.15); } }
+@media (prefers-reduced-motion: reduce) { .vn-mic.rec { animation: none; } }
+.vn-time { font: 700 1.75rem/1 var(--font); font-variant-numeric: tabular-nums; }
+.vn-meter { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 10px; }
+.vn-meter i { display: block; height: 100%; background: var(--ok); transform-origin: left; transform: scaleX(0); transition: transform 60ms linear; }
+.vn-player audio { width: 100%; }
+.item-audio { border-radius: 50%; }
+.item-audio.playing { outline: 2px solid var(--ok); outline-offset: 3px; animation: rec 1.2s ease-in-out infinite; }

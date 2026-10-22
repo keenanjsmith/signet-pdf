@@ -13,9 +13,10 @@ export function textWidth(text, size) {
 const TEXT_PAD = 2; // page units on each side
 
 export class Items {
-  constructor(viewer, { onChange }) {
+  constructor(viewer, { onChange, onActivate }) {
     this.viewer = viewer;
     this.onChange = onChange;
+    this.onActivate = onActivate; // tap on an item that's already selected (plays a voice note)
     this.items = [];
     this.history = [];
     this.selected = null;
@@ -32,6 +33,7 @@ export class Items {
       const editing = a?.isContentEditable;
       if ((e.key === 'Delete' || e.key === 'Backspace') && !editing) { e.preventDefault(); this.remove(this.selected); }
       if (e.key === 'Escape') { if (editing) document.activeElement.blur(); else this.select(null); }
+      if (!editing && (e.key === 'Enter' || e.key === ' ') && this.get(this.selected)?.kind === 'audio') { e.preventDefault(); this.onActivate?.(this.get(this.selected)); }
       if (!editing && e.key.startsWith('Arrow')) {
         e.preventDefault();
         const it = this.get(this.selected); const step = e.shiftKey ? 10 : 1;
@@ -123,7 +125,8 @@ export class Items {
     let el = this.els.get(it.id);
     if (el) return el;
     el = h('div', { class: 'item item-' + it.kind + (it.auto ? ' item-auto' : ''), 'data-id': it.id, tabindex: '0', role: 'group',
-      'aria-label': { signature: 'Signature', initials: 'Initials', text: 'Text', date: 'Date', check: 'Check mark', cross: 'X mark', dot: 'Dot' }[it.kind] });
+      'aria-label': { signature: 'Signature', initials: 'Initials', text: 'Text', date: 'Date', check: 'Check mark', cross: 'X mark', dot: 'Dot', audio: 'Voice note. Tap to play.' }[it.kind],
+      title: it.kind === 'audio' ? 'Voice note: tap to play, drag to move' : null });
     if (it.src) el.append(h('img', { src: it.src, alt: '', draggable: 'false' }));
     if (it.kind === 'text' || it.kind === 'date') {
       const span = h('span', { class: 'txt', spellcheck: 'false', 'data-placeholder': 'Type here' });
@@ -226,6 +229,7 @@ export class Items {
       const d = drag; drag = null;
       el.classList.remove('dragging');
       if (d.moved) { this.changed(); return; }
+      if (!d.span && (d.wasSelected || it.kind === 'audio')) this.onActivate?.(it);
       // A tap on a selected text item starts editing.
       if (d.span && d.wasSelected) {
         d.span.focus();

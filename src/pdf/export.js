@@ -1,6 +1,7 @@
 // Build the finished PDF: form entries, signatures and text written permanently into the pages.
-import { StandardFonts, rgb, degrees } from '@cantoo/pdf-lib';
+import { StandardFonts, rgb, degrees, PDFName, PDFString, PDFHexString, PDFArray, PDFDict } from '@cantoo/pdf-lib';
 import { loadForEdit } from './load.js';
+import { voiceNoteName } from './names.js';
 
 // Where the text baseline sits inside a placed text box, as a fraction of font size.
 // Matches the on-screen layout (line-height 1.25, Helvetica/Arial metrics).
@@ -109,6 +110,71 @@ export async function buildPdf({ bytes, password, items, pageInfo, flattenForm }
     }
   }
 
+  // Voice notes: each becomes a file attached to the page at its speaker icon
+  // (Acrobat plays it from there) and is listed in the PDF's attachments.
+  let n = 0;
+  for (const it of items) {
+    if (it.kind !== 'audio' || !it.audio?.bytes) continue;
+    const page = pages[it.page - 1], info = pageInfo[it.page - 1];
+    if (!page || !info) continue;
+    n++;
+    attachVoiceNote(doc, page, info, it, voiceNoteName(it, n));
+  }
+
   const out = await doc.save({ useObjectStreams: true, addDefaultPage: false, updateFieldAppearances: false });
   return { bytes: new Uint8Array(out), warnings };
+}
+
+
+function attachVoiceNote(doc, page, info, it, name) {
+  const ctx = doc.context;
+  const now = new Date();
+  const secs = Math.round(it.audio.duration || 0);
+  const desc = `Voice note, ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')} long. Recorded in Signet PDF.`;
+  const file = ctx.stream(it.audio.bytes, {
+    Type: 'EmbeddedFile',
+    Subtype: PDFName.of(it.audio.mime || 'audio/mp4'),
+    Params: { Size: it.audio.bytes.length, CreationDate: PDFString.fromDate(now), ModDate: PDFString.fromDate(now) },
+  });
+  const fileRef = ctx.register(file);
+  const spec = ctx.obj({
+    Type: 'Filespec',
+    F: PDFString.of(name),
+    UF: PDFHexString.fromText(name),
+    EF: { F: fileRef, UF: fileRef },
+    Desc: PDFHexString.fromText(desc),
+    AFRelationship: 'Supplement',
+  });
+  const specRef = ctx.register(spec);
+
+  // Where the speaker icon is, in PDF coordinates.
+  const [ax, ay] = info.viewport.convertToPdfPoint(it.x, it.y);
+  const [bx, by] = info.viewport.convertToPdfPoint(it.x + it.w, it.y + it.h);
+  const rect = [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)];
+  // An empty look: the speaker icon is already drawn on the page, so viewers
+  // that know about attachments don't cover it with their own pin.
+  const ap = ctx.register(ctx.stream('', { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, rect[2] - rect[0], rect[3] - rect[1]] }));
+  const annot = ctx.register(ctx.obj({
+    Type: 'Annot', Subtype: 'FileAttachment', Rect: rect, FS: specRef,
+    Contents: PDFHexString.fromText(desc), T: PDFHexString.fromText('Signet PDF'),
+    Name: 'PushPin', F: 4, M: PDFString.fromDate(now), AP: { N: ap },
+  }));
+  page.node.addAnnot(annot);
+
+  // List it in the document's attachments (Chrome, Edge and others show this list).
+  const catalog = doc.catalog;
+  let names = catalog.lookup(PDFName.of('Names'));
+  if (!(names instanceof PDFDict)) { names = ctx.obj({}); catalog.set(PDFName.of('Names'), names); }
+  let tree = names.lookup(PDFName.of('EmbeddedFiles'));
+  if (!(tree instanceof PDFDict)) { tree = ctx.obj({ Names: [] }); names.set(PDFName.of('EmbeddedFiles'), tree); }
+  const arr = tree.lookup(PDFName.of('Names'));
+  if (!(arr instanceof PDFArray)) return; // an existing, complex list: the page attachment still works
+  // Keep the list sorted by name, as the PDF rules require.
+  const entries = [];
+  for (let i = 0; i + 1 < arr.size(); i += 2) entries.push([arr.get(i), arr.get(i + 1)]);
+  entries.push([PDFHexString.fromText(name), specRef]);
+  const key = (k) => (k.decodeText ? k.decodeText() : String(k));
+  entries.sort((a, b) => (key(a[0]) < key(b[0]) ? -1 : 1));
+  while (arr.size()) arr.remove(0);
+  for (const [k, v] of entries) { arr.push(k); arr.push(v); }
 }

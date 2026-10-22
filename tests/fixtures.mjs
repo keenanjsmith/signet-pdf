@@ -95,4 +95,11 @@ fs.mkdirSync(out, { recursive: true });
   p.drawText('Landlord Signature', { x: 72, y: 138, size: 9, font: f });
   fs.writeFileSync(out + '/agreement.pdf', await d.save());
 }
+{
+  // A page with no text at all, like a scan.
+  const d = await PDFDocument.create();
+  const p = d.addPage([612, 792]);
+  p.drawRectangle({ x: 72, y: 500, width: 300, height: 200, color: rgb(0.8, 0.8, 0.8) });
+  fs.writeFileSync(out + '/notext.pdf', await d.save());
+}
 console.log('fixtures written');

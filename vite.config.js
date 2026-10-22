@@ -14,6 +14,7 @@ const CSP = [
   "connect-src 'self' https://www.googleapis.com https://accounts.google.com https://content.googleapis.com",
   "frame-src https://accounts.google.com https://docs.google.com https://drive.google.com https://content.googleapis.com",
   "worker-src 'self' blob:",
+  "media-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

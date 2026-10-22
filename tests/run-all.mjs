@@ -14,6 +14,7 @@ try {
   run(`node tests/e2e.mjs ${OUT}`);
   run(`node tests/integration.mjs ${OUT}`);
   run(`node tests/smart.mjs ${OUT}`);
+  run(`node tests/audio.mjs ${OUT}`);
 } catch { failed = true; }
 finally { server.kill(); }
 console.log(failed ? 'Some tests failed.' : `All tests passed. Output PDFs are in ${OUT}/`);

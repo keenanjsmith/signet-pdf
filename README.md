@@ -14,6 +14,9 @@ Signet is one app that installs on Windows, Mac, Linux, Android and iPhone from 
 - **Flat PDFs**: on PDFs with no real fill-in boxes, Signet finds the blanks people write on (boxes, `______` lines, signature lines) so you can tap one to type on it, and fills them from My info too. Scanned paper forms (pictures of pages) still need you to place things yourself.
 - **Add text, dates, ✓ and ✕** anywhere on the page. Drag to move, drag the corner dot to resize, undo any step.
 - **Digital ID signatures (optional)**: add a certificate signature that proves who signed and that nothing changed afterward. Import a `.p12`/`.pfx` you already have, or create a free personal ID in the app.
+- **Read aloud**: tap the speaker button and Signet reads the PDF to you, highlighting each passage, with pause, skip and speed. It only uses the voices built into your device, never online voices, so the text stays private. (Scanned pages have no text to read.)
+- **Voice notes**: record a spoken comment and pin it to the page. It's saved inside the PDF (Adobe Acrobat and Reader play it) and can also be sent as its own audio file, since most other viewers can't play audio in a PDF.
+- **Fill in by speaking**: Signet's boxes work with your device's own dictation: the microphone on your phone keyboard, Windows key + H, or pressing the Globe (fn) key twice on a Mac.
 - **Protected PDFs**: files with editing restrictions open normally, and files that need a password ask for it once.
 - **Save anywhere**: save to Google Drive (into a "Signet PDF" folder), use your phone's share menu (email, Messages, Files, Drive app), or download.
 - **Open from anywhere**: choose a file, drag it in, share it to Signet from another Android app, double-click a PDF (installed desktop app), or pick from Google Drive (optional).
@@ -24,6 +27,7 @@ Signet is one app that installs on Windows, Mac, Linux, Android and iPhone from 
 - **Your PDFs never leave your device** unless you tap Save to Google Drive. There is no Signet server, no account, no analytics, no ads and no tracking.
 - **Saved signatures and digital IDs stay in this browser** on this device. Digital IDs stay locked with your password, and the password is never stored. Unlocked IDs are held in memory only until the app closes.
 - **My info stays on this device.** Everyday details are saved like browser autofill. Private details are encrypted with AES-256-GCM using a key made from your passcode (PBKDF2-SHA256, 600,000 rounds); the passcode is never saved, and unlocked details live only in memory and lock again after 15 minutes or when the app closes. Finding boxes and deciding what goes where all happens on the device, with no AI service or server involved.
+- **Read aloud never sends your text anywhere.** Voices that would send text to an online service are left out. **Voice notes** are recorded on the device, the microphone switches off as soon as you stop, and the clip only leaves inside the PDF or audio file you choose to save, share or send.
 - **Google is only contacted if you set up Drive.** The app then asks for the narrowest Drive permission (`drive.file`): it can see only files it saved for you or files you pick yourself, not the rest of your Drive. The sign-in token lives in memory and is forgotten when the app closes.
 - **You own the Google connection.** Drive goes through your own free Google Cloud project, so no third party sits in between.
 - **A strict Content Security Policy** stops the app from loading code or sending data anywhere except itself and, when you use Drive, Google.
@@ -45,7 +49,7 @@ npm run build      # production build in dist/
 npm test           # builds, then runs the browser tests (needs: npx playwright install chromium)
 ```
 
-Built with [pdf.js](https://github.com/mozilla/pdf.js) (Mozilla's PDF engine, used by Firefox) for viewing and form filling, [pdf-lib](https://github.com/cantoo-scribe/pdf-lib) for writing PDFs, and [node-forge](https://github.com/digitalbazaar/forge) for digital ID signatures. No frameworks; the source is small enough to read in an afternoon.
+Built with [pdf.js](https://github.com/mozilla/pdf.js) (Mozilla's PDF engine, used by Firefox) for viewing and form filling, [pdf-lib](https://github.com/cantoo-scribe/pdf-lib) for writing PDFs, [fix-webm-duration](https://github.com/yusitnikov/fix-webm-duration) so recordings show their length, and [node-forge](https://github.com/digitalbazaar/forge) for digital ID signatures. No frameworks; the source is small enough to read in an afternoon.
 
 ```
 src/
@@ -59,6 +63,8 @@ src/
   fields/scan.js   finds form boxes, their labels, and blanks on flat PDFs
   fields/match.js  decides which of your details goes in which box
   smart.js         sign-here tags, autofill, next box
+  readaloud.js     read aloud with on-device voices
+  voice.js         recording and playing voice notes
   profile.js       My info, with encrypted private details
   drive.js         Google Drive (drive.file scope)
   store.js         on-device storage (IndexedDB)
@@ -66,7 +72,7 @@ src/
 tests/             browser tests that drive the real app and check the output PDFs
 ```
 
-The tests open real PDFs in Chromium, sign and fill them the way a person would, and save the results. They cover form filling and locking, My info autofill (including boxes it must leave alone), sign-here boxes and signing dates, blanks on flat PDFs, placement accuracy on rotated pages, protected PDFs, digital ID signatures, Google Drive uploads (against a stand-in for Google), the Android share menu, offline use, and a check that the app sends nothing anywhere during normal use.
+The tests open real PDFs in Chromium, sign and fill them the way a person would, and save the results. They cover form filling and locking, My info autofill (including boxes it must leave alone), sign-here boxes and signing dates, blanks on flat PDFs, read aloud (including that online voices are never used), voice notes with a fake microphone, placement accuracy on rotated pages, protected PDFs, digital ID signatures, Google Drive uploads (against a stand-in for Google), the Android share menu, offline use, and a check that the app sends nothing anywhere during normal use.
 
 ## License
 
